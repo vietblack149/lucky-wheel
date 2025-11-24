@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vòng Quay May Mắn Cùng Eximbank</title>
+    <style>
+        /* --- CẤU TRÚC UI/UX --- */
+        :root {
+            --primary-color: #0054a6; /* Xanh Eximbank */
+            --secondary-color: #ffffff;
+            --accent-color: #f39c12;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            text-transform: uppercase;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 24px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* Container của vòng quay */
+        .wheel-container {
+            position: relative;
+            width: 350px;
+            height: 350px;
+            margin-bottom: 30px;
+        }
+
+        /* Mũi tên chỉ định (Marker) - Cố định ở vị trí 12h */
+        .marker {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #e74c3c;
+            z-index: 10;
+            filter: drop-shadow(0 4px 2px rgba(0,0,0,0.3));
+        }
+
+        /* Canvas vẽ vòng quay */
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            /* Xoay mặc định */
+            transform: rotate(0deg);
+            border-radius: 50%;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+            border: 5px solid var(--secondary-color);
+        }
+
+        /* Nút bấm */
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 15px 50px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0, 84, 166, 0.4);
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        button:hover {
+            background-color: #003d7a;
+            transform: scale(1.05);
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Modal thông báo kết quả */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+            width: 400px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            position: relative;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .modal h2 {
+            color: var(--primary-color);
+            margin-top: 0;
+            font-size: 28px;
+        }
+
+        .prize-name {
+            font-size: 26px;
+            color: #e67e22;
+            font-weight: bold;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+
+        .close-btn {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            display: inline-block;
+            cursor: pointer;
+        }
+
+        @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        /* Mobile responsive */
+        @media (max-width: 400px) {
+            .wheel-container { width: 300px; height: 300px; }
+            h1 { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div style="margin-bottom: 10px;">
+               
+<img src="Logo.png" height="35">
+    </div>
+    
+    <h1>Vòng Quay May Mắn</h1>
+
+    <div class="wheel-container">
+        <div class="marker"></div>
+        <canvas id="wheelCanvas" width="500" height="500"></canvas>
+    </div>
+
+    <button id="spinBtn" onclick="spinWheel()">QUAY NGAY</button>
+
+    <div id="resultModal" class="modal">
+        <div class="modal-content">
+            <h2>🎉 CHÚC MỪNG! 🎉</h2>
+            <p>Bạn đã nhận được phần quà:</p>
+            <div class="prize-name" id="prizeResult">...</div>
+            <div class="close-btn" onclick="closeModal()">Nhận quà</div>
+        </div>
+    </div>
+
+    <audio id="tickSound" src="spinning.w"></audio>
+    <audio id="winSound" src="votay.mp3"></audio>
+
+    <script>
+        // --- 1. CẤU HÌNH DỮ LIỆU (GIỮ NGUYÊN TỶ LỆ) ---
+        // Lưu ý: Thứ tự trong mảng này sẽ được vẽ theo chiều kim đồng hồ bắt đầu từ góc 3h (0 độ)
+        const items = [
+            { label: "Bút bi", rate: 43, color: "#0054a6", text: "#fff" },         
+            { label: "Quà tặng mini", rate: 43, color: "#3498db", text: "#fff" },  
+            { label: "Sổ tay", rate: 5, color: "#f1c40f", text: "#333" },          
+            { label: "Áo mưa", rate: 5, color: "#e67e22", text: "#fff" },          
+            { label: "Gấu bông", rate: 2, color: "#e74c3c", text: "#fff" },        
+            { label: "Bình giữ nhiệt", rate: 2, color: "#9b59b6", text: "#fff" }   
+        ];
+
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const spinBtn = document.getElementById('spinBtn');
+        const modal = document.getElementById('resultModal');
+        const prizeResult = document.getElementById('prizeResult');
+        const tickSound = document.getElementById('tickSound');
+        const winSound = document.getElementById('winSound');
+
+        const totalItems = items.length;
+        const sliceDeg = 360 / totalItems; // Mỗi ô 60 độ
+        const arc = 2 * Math.PI / totalItems; 
+        
+        // Biến lưu tổng góc đã quay (để quay tiếp chứ không reset)
+        let currentRotation = 0; 
+
+        // --- 2. VẼ VÒNG QUAY ---
+        function drawWheel() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = canvas.width / 2;
+
+            ctx.save();
+            for (let i = 0; i < totalItems; i++) {
+                const angle = i * arc; // Góc bắt đầu vẽ (radian)
+                
+                ctx.beginPath();
+                ctx.fillStyle = items[i].color;
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, angle, angle + arc);
+                ctx.lineTo(centerX, centerY);
+                ctx.fill();
+                ctx.strokeStyle = "#ffffff";
+                ctx.lineWidth = 4;
+                ctx.stroke();
+
+                // Vẽ chữ
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(angle + arc / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = items[i].text;
+                ctx.font = "bold 22px Arial"; 
+                ctx.fillText(items[i].label, radius - 30, 10);
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+
+        // --- 3. LOGIC TỶ LỆ % ---
+        function getWeightedRandomItem() {
+            let random = Math.random() * 100; 
+            let currentWeight = 0;
+            for (let i = 0; i < items.length; i++) {
+                currentWeight += items[i].rate;
+                if (random < currentWeight) return i;
+            }
+            return 0; 
+        }
+
+        // --- 4. XỬ LÝ ÂM THANH ---
+        function playTickingSound(duration) {
+            let timeElapsed = 0;
+            let intervalTime = 300; 
+
+            const tickLoop = () => {
+                if (timeElapsed >= duration) return;
+                tickSound.currentTime = 0;
+                tickSound.play().catch(e => {}); 
+
+                const progress = timeElapsed / duration; 
+                intervalTime = 500 + (progress * progress * 400); 
+                timeElapsed += intervalTime;
+                setTimeout(tickLoop, intervalTime);
+            };
+            tickLoop();
+        }
+
+        // --- 5. THUẬT TOÁN QUAY CHÍNH XÁC (ĐÃ FIX) ---
+        function spinWheel() {
+            if (spinBtn.disabled) return;
+
+            spinBtn.disabled = true;
+            spinBtn.innerText = "ĐANG QUAY...";
+            winSound.pause(); winSound.currentTime = 0;
+
+            // B1: Xác định kết quả trước
+            const winningIndex = getWeightedRandomItem();
+            const prize = items[winningIndex];
+            
+            // B2: Tính toán góc dừng
+            // Hệ tọa độ: 
+            // - Canvas vẽ từ góc 0 (3 giờ).
+            // - Mũi tên nằm ở góc 270 (12 giờ).
+            // - Để phần thưởng i đến được mũi tên, ta cần xoay sao cho tâm của phần thưởng i trùng với góc 270.
+            
+            // Góc hiện tại của tâm phần thưởng (khi chưa quay)
+            const currentItemCenter = (winningIndex * sliceDeg) + (sliceDeg / 2);
+            
+            // Góc cần xoay thêm để đưa currentItemCenter về vị trí 270 độ
+            // Công thức: Mục tiêu (270) - Hiện tại (currentItemCenter)
+            let distanceToTarget = 270 - currentItemCenter;
+            
+            // Cộng thêm ngẫu nhiên trong khoảng an toàn (để mũi tên không chỉ vào vạch kẻ)
+            // Slice là 60 độ, ta cho phép lệch +/- 20 độ từ tâm ô
+            const safeOffset = Math.floor(Math.random() * 40) - 20;
+            distanceToTarget += safeOffset;
+
+            // B3: Tính tổng góc quay (cộng dồn vào lần quay trước)
+            // Thêm ít nhất 5 vòng quay (5 * 360)
+            const spins = 5 * 360;
+            
+            // Tính góc quay tương đối cần thiết để đến đích
+            // Logic: Lấy góc hiện tại, cộng thêm 5 vòng, rồi cộng phần dư để đến đích
+            // Cách đơn giản nhất để luôn quay tới:
+            // currentRotation % 360 là vị trí hiện tại trên vòng tròn (0-360).
+            // Ta cần đi từ (currentRotation % 360) đến (distanceToTarget).
+            
+            // Tính delta cần xoay thêm:
+            let delta = distanceToTarget - (currentRotation % 360);
+            
+            // Nếu delta < 0 (tức là phải quay lùi), ta cộng thêm 360 để nó quay tiếp theo chiều kim đồng hồ
+            if (delta < 0) delta += 360;
+            
+            // Tổng góc quay cuối cùng
+            const finalRotation = currentRotation + spins + delta;
+
+            // B4: Thực hiện Animation
+            const spinTime = 5000; // 5 giây
+            canvas.style.transition = `transform ${spinTime}ms cubic-bezier(0.25, 0.1, 0.25, 1)`;
+            canvas.style.transform = `rotate(${finalRotation}deg)`;
+
+            // Lưu lại góc hiện tại cho lần sau
+            currentRotation = finalRotation;
+
+            // Hiệu ứng âm thanh
+            playTickingSound(spinTime);
+
+            // B5: Hiện kết quả
+            setTimeout(() => {
+                showResult(prize.label);
+                spinBtn.disabled = false;
+                spinBtn.innerText = "QUAY TIẾP";
+            }, spinTime);
+        }
+
+        function showResult(prizeName) {
+            prizeResult.innerText = prizeName;
+            modal.style.display = "flex";
+            winSound.play().catch(e => {});
+        }
+
+        function closeModal() {
+            modal.style.display = "none";
+            winSound.pause(); winSound.currentTime = 0;
+        }
+
+        // Khởi chạy lần đầu
+        drawWheel();
+
+        window.onclick = function(event) {
+            if (event.target == modal) closeModal();
+        }
+    </script>
+</body>
+</html>
